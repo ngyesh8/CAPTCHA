@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Are You Human?</title>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cinzel+Decorative:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0a0a0f;
+    --fog: #1a1a2e;
+    --mist: #16213e;
+    --pale: #e8e0d0;
+    --ghost: rgba(232,224,208,0.07);
+    --glow: #b8a882;
+    --accent: #7c6f5a;
+    --danger: #8b2635;
+    --success: #2d6a4f;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--ink);
+    color: var(--pale);
+    font-family: 'IM Fell English', serif;
+    overflow: hidden;
+    cursor: default;
+  }
+
+  #scene {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+
+  /* Atmospheric background */
+  #bg-canvas {
+    position: fixed; inset: 0;
+    z-index: 0;
+  }
+
+  /* Cursor ripple rings */
+  .cursor-ring {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    border: 1.5px solid var(--glow);
+    transform: translate(-50%, -50%);
+    animation: ring-expand 1s ease-out forwards;
+  }
+
+  @keyframes ring-expand {
+    0%   { width: 10px; height: 10px; opacity: 0.9; }
+    100% { width: 70px; height: 70px; opacity: 0; }
+  }
+
+  /* Main UI */
+  #ui {
+    position: relative; z-index: 10;
+    width: 100%; max-width: 700px;
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 0 2rem;
+  }
+
+  #header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  #title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(1.1rem, 3vw, 1.6rem);
+    letter-spacing: 0.3em;
+    color: var(--glow);
+    text-transform: uppercase;
+    opacity: 0;
+    animation: fade-in 2s ease 0.5s forwards;
+  }
+
+  #subtitle {
+    margin-top: 0.6rem;
+    font-size: 0.9rem;
+    font-style: italic;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    opacity: 0;
+    animation: fade-in 2s ease 1.2s forwards;
+  }
+
+  @keyframes fade-in {
+    to { opacity: 1; }
+  }
+
+  /* The listening field */
+  #field {
+    position: relative;
+    width: min(500px, 80vw);
+    height: min(500px, 50vh);
+    border: 1px solid rgba(184,168,130,0.15);
+    background: radial-gradient(ellipse at center, rgba(26,26,46,0.8) 0%, rgba(10,10,15,0.95) 100%);
+    overflow: hidden;
+    margin-bottom: 2rem;
+    opacity: 0;
+    animation: fade-in 2s ease 1.8s forwards;
+  }
+
+  #field::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(184,168,130,0.02) 40px, rgba(184,168,130,0.02) 41px),
+      repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(184,168,130,0.02) 40px, rgba(184,168,130,0.02) 41px);
+    pointer-events: none;
+  }
+
+  /* Corner ornaments */
+  #field::after {
+    content: '';
+    position: absolute; inset: 8px;
+    border: 1px solid rgba(184,168,130,0.08);
+    pointer-events: none;
+  }
+
+  .corner {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: rgba(184,168,130,0.4);
+    border-style: solid;
+    z-index: 2;
+  }
+  .corner.tl { top: 0; left: 0; border-width: 1px 0 0 1px; }
+  .corner.tr { top: 0; right: 0; border-width: 1px 1px 0 0; }
+  .corner.bl { bottom: 0; left: 0; border-width: 0 0 1px 1px; }
+  .corner.br { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+
+  /* Voice is invisible — no visual indicators of its position */
+
+  /* Fog particle canvas */
+  #fog-canvas {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Instruction text inside field */
+  #field-instruction {
+    position: absolute;
+    bottom: 14px; left: 0; right: 0;
+    text-align: center;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: rgba(184,168,130,0.3);
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* Volume meter */
+  #volume-bar-wrap {
+    width: min(500px, 80vw);
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fade-in 1s ease 2.5s forwards;
+  }
+
+  #volume-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  #volume-bar-track {
+    height: 3px;
+    background: rgba(184,168,130,0.1);
+    position: relative;
+  }
+
+  #volume-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(to right, rgba(184,168,130,0.3), var(--glow));
+    transition: width 0.08s;
+    position: relative;
+  }
+  #volume-bar-fill::after {
+    content: '';
+    position: absolute; right: -1px; top: -3px;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--glow);
+    box-shadow: 0 0 8px var(--glow);
+  }
+
+  /* Transcript area */
+  #transcript-area {
+    width: min(500px, 80vw);
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fade-in 1s ease 2.5s forwards;
+  }
+
+  #transcript-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  #transcript-input {
+    width: 100%;
+    background: rgba(232,224,208,0.04);
+    border: 1px solid rgba(184,168,130,0.2);
+    border-top: 1px solid rgba(184,168,130,0.35);
+    color: var(--pale);
+    font-family: 'Special Elite', cursive;
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    padding: 0.8rem 1rem;
+    outline: none;
+    transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
+    caret-color: var(--glow);
+  }
+
+  #transcript-input:focus {
+    border-color: rgba(184,168,130,0.5);
+    background: rgba(232,224,208,0.07);
+    box-shadow: 0 0 20px rgba(184,168,130,0.08) inset;
+  }
+
+  #transcript-input::placeholder {
+    color: rgba(184,168,130,0.2);
+    font-style: italic;
+  }
+
+  #submit-row {
+    width: min(500px, 80vw);
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    opacity: 0;
+    animation: fade-in 1s ease 2.5s forwards;
+  }
+
+  #submit-btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid rgba(184,168,130,0.35);
+    color: var(--glow);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #submit-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(184,168,130,0);
+    transition: background 0.3s;
+  }
+
+  #submit-btn:hover::before { background: rgba(184,168,130,0.08); }
+  #submit-btn:hover { border-color: rgba(184,168,130,0.7); box-shadow: 0 0 20px rgba(184,168,130,0.1); }
+  #submit-btn:active { transform: scale(0.98); }
+
+  /* Result overlay */
+  #result {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 100;
+    background: rgba(10,10,15,0.92);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1.5rem;
+    animation: fade-in 0.5s ease forwards;
+  }
+  #result.show { display: flex; }
+
+  #result-icon {
+    font-size: 3rem;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  #result-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(1.2rem, 4vw, 2rem);
+    letter-spacing: 0.2em;
+  }
+
+  #result-title.pass { color: #a8d5b5; }
+  #result-title.fail { color: #c97b84; }
+
+  #result-msg {
+    font-style: italic;
+    color: var(--accent);
+    font-size: 0.95rem;
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.7;
+  }
+
+  #result-sub {
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    color: rgba(184,168,130,0.4);
+    text-transform: uppercase;
+  }
+
+  #try-again {
+    background: transparent;
+    border: 1px solid rgba(184,168,130,0.3);
+    color: var(--glow);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    padding: 0.7rem 2rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+  #try-again:hover { border-color: var(--glow); background: rgba(184,168,130,0.07); }
+
+  /* Intro overlay */
+  #intro {
+    position: fixed; inset: 0; z-index: 50;
+    background: var(--ink);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2rem;
+    transition: opacity 1s;
+  }
+  #intro.hide { opacity: 0; pointer-events: none; }
+
+  #intro-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(1.5rem, 5vw, 3rem);
+    letter-spacing: 0.2em;
+    color: var(--glow);
+    text-align: center;
+    animation: flicker 5s ease infinite;
+  }
+
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.7; }
+    97% { opacity: 1; }
+    98% { opacity: 0.5; }
+    99% { opacity: 1; }
+  }
+
+  #intro-text {
+    color: var(--accent);
+    font-style: italic;
+    text-align: center;
+    max-width: 380px;
+    line-height: 1.8;
+    font-size: 0.95rem;
+  }
+
+  #start-btn {
+    background: transparent;
+    border: 1px solid rgba(184,168,130,0.4);
+    color: var(--glow);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    padding: 1rem 3rem;
+    cursor: pointer;
+    transition: all 0.4s;
+    text-transform: uppercase;
+    animation: pulse-border 3s ease infinite;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(184,168,130,0); }
+    50% { box-shadow: 0 0 0 6px rgba(184,168,130,0.08); }
+  }
+
+  #start-btn:hover {
+    background: rgba(184,168,130,0.08);
+    border-color: var(--glow);
+    box-shadow: 0 0 30px rgba(184,168,130,0.15);
+  }
+
+  /* hint text */
+  #hint {
+    position: absolute;
+    bottom: 40px;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: rgba(184,168,130,0.2);
+    text-transform: uppercase;
+    text-align: center;
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+
+<!-- Intro screen -->
+<div id="intro">
+  <div id="intro-title">Are You Human?</div>
+  <div id="intro-text">
+    Somewhere in the darkness, a voice is whispering.<br>
+    Move your cursor to find it. Listen closely.<br>
+    When you understand what it says — tell us.
+  </div>
+  <button id="start-btn" onclick="startGame()">Begin</button>
+  <div id="hint">enable your audio for the full experience</div>
+</div>
+
+<!-- Background canvas -->
+<canvas id="bg-canvas"></canvas>
+
+<div id="scene">
+  <div id="ui">
+    <div id="header">
+      <div id="title">Proof of Humanity</div>
+      <div id="subtitle">Find the voice. Hear its secret.</div>
+    </div>
+
+    <!-- Listening field -->
+    <div id="field">
+      <canvas id="fog-canvas"></canvas>
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div id="field-instruction">move your cursor within this space</div>
+    </div>
+
+    <!-- Volume meter -->
+    <div id="volume-bar-wrap">
+      <div id="volume-label">
+        <span>Voice Clarity</span>
+        <span id="volume-pct">—</span>
+      </div>
+      <div id="volume-bar-track">
+        <div id="volume-bar-fill"></div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div id="transcript-area">
+      <div id="transcript-label">What does the voice say?</div>
+      <input
+        type="text"
+        id="transcript-input"
+        placeholder="transcribe the whisper…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    <div id="submit-row">
+      <button id="submit-btn" onclick="checkAnswer()">Submit Transcription</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Result overlay -->
+<div id="result">
+  <div id="result-icon"></div>
+  <div id="result-title"></div>
+  <div id="result-msg"></div>
+  <div id="result-sub"></div>
+  <button id="try-again" onclick="resetGame()">Try Again</button>
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let audioCtx = null;
+let gameStarted = false;
+let voiceX = 0.5, voiceY = 0.5; // normalized 0–1 within field
+let mouseFieldX = 0, mouseFieldY = 0;
+let proximity = 0; // 0–1
+let whisperNodes = {};
+let fieldEl, fogCtx, fogCanvas;
+let particles = [];
+let animFrame;
+let currentPhrase = '';
+let whisperInterval = null;
+let moveInterval = null;
+let voiceMoveT = 0;
+let voicePath = [];
+
+// Phrases to whisper
+const phrases = [
+  "moth and shadow",
+  "three blind ravens",
+  "hollow bone",
+  "the mirror breathes",
+  "silver and forgetting",
+  "beneath the seventh door",
+  "only the sleeping know",
+  "ash and quiet",
+  "between two heartbeats",
+  "the candle remembers",
+  "cold water rising",
+  "where the clock stopped",
+  "bone and honeydew",
+  "speak to no one",
+  "the last train home",
+];
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+function startGame() {
+  document.getElementById('intro').classList.add('hide');
+  setTimeout(() => document.getElementById('intro').remove(), 1100);
+
+  fieldEl = document.getElementById('field');
+  fogCanvas = document.getElementById('fog-canvas');
+  fogCtx = fogCanvas.getContext('2d');
+
+  // Pick phrase
+  currentPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+
+  // Place voice
+  placeVoiceRandom();
+  generateVoicePath();
+
+  // Init fog particles
+  resizeFog();
+  initParticles();
+
+  // Start animation
+  gameStarted = true;
+  tick();
+
+  // Start whisper movement
+  moveInterval = setInterval(moveVoice, 50);
+
+  // Setup audio on first user interaction (already happened via click)
+  setupAudio();
+}
+
+function setupAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    createWhisperEngine();
+  } catch(e) {}
+}
+
+// ─── Audio Engine ─────────────────────────────────────────────────────────────
+let gainMaster, noiseGainNode, whisperers = [];
+let speechSynth = window.speechSynthesis;
+let isSpeaking = false;
+let speechLoopTimeout = null;
+
+function createWhisperEngine() {
+  if (!audioCtx) return;
+
+  // Master gain (controls static noise volume too)
+  gainMaster = audioCtx.createGain();
+  gainMaster.gain.value = 0;
+  gainMaster.connect(audioCtx.destination);
+
+  // Static noise layer — always present, volume tied to proximity
+  const bufferSize = audioCtx.sampleRate * 3;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+  const noiseSource = audioCtx.createBufferSource();
+  noiseSource.buffer = noiseBuffer;
+  noiseSource.loop = true;
+
+  const noiseFilter = audioCtx.createBiquadFilter();
+  noiseFilter.type = 'highpass';
+  noiseFilter.frequency.value = 3800;
+
+  noiseGainNode = audioCtx.createGain();
+  noiseGainNode.gain.value = 0.06;
+
+  noiseSource.connect(noiseFilter);
+  noiseFilter.connect(noiseGainNode);
+  noiseGainNode.connect(gainMaster);
+  noiseSource.start();
+
+  // Start speech loop
+  startSpeechLoop();
+}
+
+function getSpeechVolume() {
+  // SpeechSynthesis volume: 0–1, map proximity with a floor so it's audible when close
+  return Math.max(0, Math.min(1, proximity * 1.1));
+}
+
+function startSpeechLoop() {
+  if (!speechSynth) return;
+  speakPhrase();
+}
+
+function speakPhrase() {
+  if (!gameStarted) return;
+  speechSynth.cancel();
+
+  const utter = new SpeechSynthesisUtterance(currentPhrase);
+  utter.volume = getSpeechVolume();
+  utter.rate = 0.72;      // slow, deliberate
+  utter.pitch = 0.85;     // slightly low, eerie
+  utter.lang = 'en-US';
+
+  // Pick a voice — prefer female or whispery-sounding
+  const voices = speechSynth.getVoices();
+  const preferred = voices.find(v =>
+    /samantha|karen|moira|fiona|victoria|zira|hazel/i.test(v.name)
+  ) || voices.find(v => v.lang === 'en-US') || voices[0];
+  if (preferred) utter.voice = preferred;
+
+  utter.onend = () => {
+    if (!gameStarted) return;
+    // Pause between repetitions — shorter pause when proximity is high
+    const pause = 800 + (1 - proximity) * 2200;
+    speechLoopTimeout = setTimeout(speakPhrase, pause);
+  };
+
+  utter.onerror = () => {
+    if (!gameStarted) return;
+    speechLoopTimeout = setTimeout(speakPhrase, 1500);
+  };
+
+  isSpeaking = true;
+  speechSynth.speak(utter);
+}
+
+function updateSpeechVolume() {
+  // Can't update mid-utterance volume easily, but we re-speak on next cycle.
+  // For immediate effect, cancel and restart if proximity changed significantly.
+  if (!speechSynth) return;
+}
+
+function stopSpeech() {
+  speechSynth.cancel();
+  isSpeaking = false;
+  if (speechLoopTimeout) clearTimeout(speechLoopTimeout);
+}
+
+// ─── Voice movement ───────────────────────────────────────────────────────────
+function placeVoiceRandom() {
+  voiceX = 0.15 + Math.random() * 0.7;
+  voiceY = 0.15 + Math.random() * 0.7;
+}
+
+function generateVoicePath() {
+  voicePath = [];
+  let x = voiceX, y = voiceY;
+  for (let i = 0; i < 200; i++) {
+    x += (Math.random() - 0.5) * 0.04;
+    y += (Math.random() - 0.5) * 0.04;
+    x = Math.max(0.1, Math.min(0.9, x));
+    y = Math.max(0.1, Math.min(0.9, y));
+    voicePath.push({ x, y });
+  }
+}
+
+function moveVoice() {
+  if (!gameStarted) return;
+  voiceMoveT = (voiceMoveT + 1) % voicePath.length;
+  if (voiceMoveT === voicePath.length - 10) generateVoicePath();
+  voiceX = voicePath[voiceMoveT].x;
+  voiceY = voicePath[voiceMoveT].y;
+  updateVoiceOrb();
+}
+
+function updateVoiceOrb() {
+  const orb = document.getElementById('voice-orb');
+  const rect = fieldEl.getBoundingClientRect();
+  const px = voiceX * rect.width;
+  const py = voiceY * rect.height;
+  orb.style.left = px + 'px';
+  orb.style.top = py + 'px';
+
+  // Voice ring speed based on proximity
+  document.querySelectorAll('.voice-ring').forEach(r => {
+    const speed = 1 + (1 - proximity) * 2;
+    r.style.animationDuration = speed + 's';
+  });
+}
+
+// ─── Mouse tracking ───────────────────────────────────────────────────────────
+let mouseX = 0, mouseY = 0;
+
+document.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+
+  if (!gameStarted || !fieldEl) return;
+
+  const rect = fieldEl.getBoundingClientRect();
+  const fx = (e.clientX - rect.left) / rect.width;
+  const fy = (e.clientY - rect.top) / rect.height;
+
+  if (fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1) {
+    mouseFieldX = fx;
+    mouseFieldY = fy;
+    updateProximity();
+  }
+});
+
+// ─── Ripple emitter ───────────────────────────────────────────────────────────
+// Emit rings at a rate proportional to proximity (0.3/s idle → 6/s at max)
+let lastRippleTime = 0;
+
+function emitRippleIfReady(now) {
+  // interval in ms: at proximity=0 → 3000ms, at proximity=1 → 160ms
+  const interval = 160 + (1 - proximity) * 2840;
+  if (now - lastRippleTime < interval) return;
+  lastRippleTime = now;
+
+  const ring = document.createElement('div');
+  ring.className = 'cursor-ring';
+  ring.style.left = mouseX + 'px';
+  ring.style.top  = mouseY + 'px';
+  // Scale animation duration inversely with proximity so fast = snappy
+  const dur = 0.45 + (1 - proximity) * 0.75;
+  ring.style.animationDuration = dur + 's';
+  // Tint slightly warmer / brighter at high proximity
+  const alpha = 0.4 + proximity * 0.6;
+  ring.style.borderColor = `rgba(184,168,130,${alpha})`;
+  document.body.appendChild(ring);
+  setTimeout(() => ring.remove(), dur * 1000 + 50);
+}
+
+function updateProximity() {
+  const dx = mouseFieldX - voiceX;
+  const dy = mouseFieldY - voiceY;
+  const dist = Math.sqrt(dx*dx + dy*dy); // 0–√2
+  const maxDist = 0.65;
+  proximity = Math.max(0, 1 - dist / maxDist);
+  proximity = Math.pow(proximity, 1.5); // ease off near edges
+
+  // Volume
+  if (audioCtx && gainMaster) {
+    const targetGain = proximity * 0.9;
+    gainMaster.gain.linearRampToValueAtTime(targetGain, audioCtx.currentTime + 0.08);
+  }
+
+  // UI updates
+  const pct = Math.round(proximity * 100);
+  document.getElementById('volume-bar-fill').style.width = pct + '%';
+  document.getElementById('volume-pct').textContent = pct > 0 ? pct + '%' : '—';
+
+  // Proximity halo
+  const halo = document.getElementById('proximity-halo');
+  const rect = fieldEl.getBoundingClientRect();
+  const size = 60 + proximity * 160;
+  halo.style.left = (voiceX * rect.width) + 'px';
+  halo.style.top = (voiceY * rect.height) + 'px';
+  halo.style.width = size + 'px';
+  halo.style.height = size + 'px';
+  halo.style.opacity = proximity * 0.8;
+
+  // Spawn whisper fragments at high proximity
+  if (proximity > 0.6 && Math.random() < 0.04) {
+    spawnWhisperFragment();
+  }
+}
+
+// ─── Whisper fragments ────────────────────────────────────────────────────────
+let fragmentIndex = 0;
+function spawnWhisperFragment() {
+  const words = currentPhrase.split(' ');
+  const word = words[fragmentIndex % words.length];
+  fragmentIndex++;
+
+  const el = document.createElement('div');
+  el.className = 'whisper-fragment';
+  el.textContent = word;
+
+  const rect = fieldEl.getBoundingClientRect();
+  const x = voiceX * rect.width + (Math.random() - 0.5) * 40;
+  const y = voiceY * rect.height + (Math.random() - 0.5) * 30;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.opacity = 0.1 + proximity * 0.4;
+
+  fieldEl.appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
+
+// ─── Fog particles ────────────────────────────────────────────────────────────
+function resizeFog() {
+  fogCanvas.width = fieldEl.offsetWidth;
+  fogCanvas.height = fieldEl.offsetHeight;
+}
+
+function initParticles() {
+  particles = [];
+  for (let i = 0; i < 40; i++) {
+    particles.push({
+      x: Math.random() * fogCanvas.width,
+      y: Math.random() * fogCanvas.height,
+      r: 30 + Math.random() * 80,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.2,
+      alpha: 0.02 + Math.random() * 0.04,
+    });
+  }
+}
+
+function drawFog() {
+  fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < -p.r) p.x = fogCanvas.width + p.r;
+    if (p.x > fogCanvas.width + p.r) p.x = -p.r;
+    if (p.y < -p.r) p.y = fogCanvas.height + p.r;
+    if (p.y > fogCanvas.height + p.r) p.y = -p.r;
+
+    const grad = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+    grad.addColorStop(0, `rgba(184,168,130,${p.alpha * (1 + proximity * 0.5)})`);
+    grad.addColorStop(1, 'rgba(184,168,130,0)');
+    fogCtx.beginPath();
+    fogCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    fogCtx.fillStyle = grad;
+    fogCtx.fill();
+  });
+}
+
+// ─── Background canvas ─────────────────────────────────────────────────────────
+const bgCanvas = document.getElementById('bg-canvas');
+const bgCtx = bgCanvas.getContext('2d');
+let bgStars = [];
+
+function initBg() {
+  bgCanvas.width = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+  bgStars = [];
+  for (let i = 0; i < 80; i++) {
+    bgStars.push({
+      x: Math.random() * bgCanvas.width,
+      y: Math.random() * bgCanvas.height,
+      r: Math.random() * 1.2,
+      a: Math.random(),
+      da: (Math.random() - 0.5) * 0.005,
+    });
+  }
+}
+
+function drawBg() {
+  bgCtx.fillStyle = '#0a0a0f';
+  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+  bgStars.forEach(s => {
+    s.a += s.da;
+    if (s.a < 0.05) s.da = Math.abs(s.da);
+    if (s.a > 0.6) s.da = -Math.abs(s.da);
+    bgCtx.beginPath();
+    bgCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    bgCtx.fillStyle = `rgba(232,224,208,${s.a * 0.4})`;
+    bgCtx.fill();
+  });
+}
+
+// ─── Main tick ────────────────────────────────────────────────────────────────
+function tick() {
+  drawBg();
+  if (gameStarted) drawFog();
+  if (gameStarted) emitRippleIfReady(performance.now());
+  animFrame = requestAnimationFrame(tick);
+}
+
+// ─── Answer checking ──────────────────────────────────────────────────────────
+function checkAnswer() {
+  const input = document.getElementById('transcript-input').value.trim().toLowerCase();
+  const target = currentPhrase.toLowerCase();
+
+  // Fuzzy match: count matching words
+  const inputWords = input.split(/\s+/).filter(Boolean);
+  const targetWords = target.split(' ');
+  let matches = 0;
+  inputWords.forEach(w => { if (targetWords.includes(w)) matches++; });
+  const score = matches / targetWords.length;
+
+  const result = document.getElementById('result');
+  result.classList.add('show');
+
+  if (score >= 0.6) {
+    document.getElementById('result-icon').textContent = '✦';
+    document.getElementById('result-title').textContent = 'Human Verified';
+    document.getElementById('result-title').className = 'pass';
+    document.getElementById('result-msg').textContent =
+      `The voice said "${currentPhrase}" — and you heard it. Only the living can listen in the dark.`;
+    document.getElementById('result-sub').textContent = 'identity confirmed · proceed';
+  } else {
+    document.getElementById('result-icon').textContent = '✧';
+    document.getElementById('result-title').textContent = 'Unverified';
+    document.getElementById('result-title').className = 'fail';
+    document.getElementById('result-msg').textContent =
+      `The voice spoke "${currentPhrase}". The words slipped past you this time. Move closer — listen longer.`;
+    document.getElementById('result-sub').textContent = 'verification failed · try again';
+  }
+
+  // Stop movement
+  gameStarted = false;
+  if (audioCtx && gainMaster) gainMaster.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1);
+}
+
+function resetGame() {
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('transcript-input').value = '';
+  document.getElementById('volume-bar-fill').style.width = '0%';
+  document.getElementById('volume-pct').textContent = '—';
+  fragmentIndex = 0;
+  proximity = 0;
+
+  // Pick new phrase & reset audio
+  currentPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+
+  // Destroy old audio
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  whisperers = [];
+  gainMaster = null;
+
+  placeVoiceRandom();
+  generateVoicePath();
+  voiceMoveT = 0;
+  gameStarted = true;
+  setupAudio();
+}
+
+// ─── Resize ────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  initBg();
+  if (fieldEl) resizeFog();
+});
+
+initBg();
+</script>
+</body>
+</html>
